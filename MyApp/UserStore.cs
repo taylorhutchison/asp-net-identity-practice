@@ -1,14 +1,38 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
+using System;
 
 
 namespace MyApp {
-    public class UserStore : IUserStore<User>
+    public class UserStore : IUserStore<User>, IUserPasswordStore<User>
     {
-        public Task<IdentityResult> CreateAsync(User user, CancellationToken cancellationToken)
+        public async static Task<SqliteConnection> GetConnection() {
+            //var connectionStringBuilder = new SqliteConnectionStringBuilder();
+            //connectionStringBuilder.DataSource = "./data.db";
+            var connection = new SqliteConnection("Filename=./data.db");
+            await connection.OpenAsync();
+            return connection;
+        }
+        public async Task<IdentityResult> CreateAsync(User user, CancellationToken cancellationToken)
         {
-            throw new System.NotImplementedException();
+            using(var connection = await GetConnection()) {
+                var transaction = await connection.BeginTransactionAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = @"INSERT INTO USERS 
+                (ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH) 
+                VALUES (:ID, :UN, :NUM, :PH);";
+                command.Parameters.AddWithValue(":ID", user.Id);
+                command.Parameters.AddWithValue(":UN", user.UserName);
+                command.Parameters.AddWithValue(":NUM", user.NormalizedUserName);
+                command.Parameters.AddWithValue(":PH", user.PasswordHash);
+
+                await command.ExecuteNonQueryAsync();
+
+                await transaction.CommitAsync();
+            }
+            return IdentityResult.Success;
         }
 
         public Task<IdentityResult> DeleteAsync(User user, CancellationToken cancellationToken)
@@ -16,14 +40,56 @@ namespace MyApp {
             throw new System.NotImplementedException();
         }
 
-        public Task<User> FindByIdAsync(string userId, CancellationToken cancellationToken)
+        public async Task<User> FindByIdAsync(string userId, CancellationToken cancellationToken)
         {
-            throw new System.NotImplementedException();
+            using(var connection = await GetConnection()) {
+                var command = connection.CreateCommand();
+                command.CommandText = 
+                @"
+                SELECT ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH
+                FROM USERS WHERE ID = :ID;
+                ";
+                command.Parameters.AddWithValue(":ID", userId);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (reader.Read())
+                    {
+                        return new User {
+                            Id = reader.GetString(0),
+                            UserName = reader.GetString(1),
+                            NormalizedUserName = reader.GetString(2),
+                            PasswordHash = reader.GetString(3)
+                        };
+                    }
+                }
+                return null;
+            }
         }
 
-        public Task<User> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken)
+        public async Task<User> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken)
         {
-            throw new System.NotImplementedException();
+             using(var connection = await GetConnection()) {
+                var command = connection.CreateCommand();
+                command.CommandText = 
+                @"
+                SELECT ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH
+                FROM USERS WHERE NORMALIZEDUSERNAME = :NUM;
+                ";
+                command.Parameters.AddWithValue(":NUM", normalizedUserName);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (reader.Read())
+                    {
+                        return new User {
+                            Id = reader.GetString(0),
+                            UserName = reader.GetString(1),
+                            NormalizedUserName = reader.GetString(2),
+                            PasswordHash = reader.GetString(3)
+                        };
+                    }
+                }
+                return null;
+            }
         }
 
         public Task<string> GetNormalizedUserNameAsync(User user, CancellationToken cancellationToken)
@@ -53,9 +119,24 @@ namespace MyApp {
 			return Task.CompletedTask;
         }
 
-        public Task<IdentityResult> UpdateAsync(User user, CancellationToken cancellationToken)
+        public async Task<IdentityResult> UpdateAsync(User user, CancellationToken cancellationToken)
         {
-            throw new System.NotImplementedException();
+             using(var connection = await GetConnection()) {
+                var transaction = await connection.BeginTransactionAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = @"UPDATE USERS SET
+                (ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH) 
+                VALUES (:ID, :UN, :NUM, :PH) WHERE ID = :ID;";
+                command.Parameters.AddWithValue(":ID", user.Id);
+                command.Parameters.AddWithValue(":UN", user.UserName);
+                command.Parameters.AddWithValue(":NUM", user.NormalizedUserName);
+                command.Parameters.AddWithValue(":PH", user.PasswordHash);
+                
+                await command.ExecuteNonQueryAsync();
+
+                await transaction.CommitAsync();
+            }
+            return IdentityResult.Success;
         }
 
         #region IDisposable Support
@@ -91,6 +172,22 @@ namespace MyApp {
             Dispose(true);
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
+        }
+
+        public Task SetPasswordHashAsync(User user, string passwordHash, CancellationToken cancellationToken)
+        {
+            user.PasswordHash = passwordHash;
+            return Task.CompletedTask;
+        }
+
+        public Task<string> GetPasswordHashAsync(User user, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(user.PasswordHash);
+        }
+
+        public Task<bool> HasPasswordAsync(User user, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(user.PasswordHash != null);
         }
         #endregion
     }
