@@ -11,7 +11,7 @@ namespace MyApp {
         public async static Task<SqliteConnection> GetConnection() {
             //var connectionStringBuilder = new SqliteConnectionStringBuilder();
             //connectionStringBuilder.DataSource = "./data.db";
-            var connection = new SqliteConnection("Filename=./data.db");
+            var connection = new SqliteConnection("Filename=./data/data.db");
             await connection.OpenAsync();
             return connection;
         }
@@ -20,7 +20,7 @@ namespace MyApp {
             using(var connection = await GetConnection()) {
                 var transaction = await connection.BeginTransactionAsync();
                 var command = connection.CreateCommand();
-                command.CommandText = @"INSERT INTO USERS 
+                command.CommandText = @"INSERT INTO MAIN.USERS 
                 (ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH) 
                 VALUES (:ID, :UN, :NUM, :PH);";
                 command.Parameters.AddWithValue(":ID", user.Id);
@@ -47,7 +47,7 @@ namespace MyApp {
                 command.CommandText = 
                 @"
                 SELECT ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH
-                FROM USERS WHERE ID = :ID;
+                FROM MAIN.USERS WHERE ID = :ID;
                 ";
                 command.Parameters.AddWithValue(":ID", userId);
                 using (var reader = await command.ExecuteReaderAsync())
@@ -73,7 +73,7 @@ namespace MyApp {
                 command.CommandText = 
                 @"
                 SELECT ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH
-                FROM USERS WHERE NORMALIZEDUSERNAME = :NUM;
+                FROM MAIN.USERS WHERE NORMALIZEDUSERNAME = :NUM;
                 ";
                 command.Parameters.AddWithValue(":NUM", normalizedUserName);
                 using (var reader = await command.ExecuteReaderAsync())
@@ -124,7 +124,7 @@ namespace MyApp {
              using(var connection = await GetConnection()) {
                 var transaction = await connection.BeginTransactionAsync();
                 var command = connection.CreateCommand();
-                command.CommandText = @"UPDATE USERS SET
+                command.CommandText = @"UPDATE MAIN.USERS SET
                 (ID, USERNAME, NORMALIZEDUSERNAME, PASSWORDHASH) 
                 VALUES (:ID, :UN, :NUM, :PH) WHERE ID = :ID;";
                 command.Parameters.AddWithValue(":ID", user.Id);
